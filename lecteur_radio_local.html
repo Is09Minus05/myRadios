@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes Radios - Lecteur Stream</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Modern Scrollbar for Webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121212;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+        /* Active playing animation pulse */
+        @keyframes pulse-border {
+            0% { border-color: rgba(34, 197, 94, 0.4); }
+            50% { border-color: rgba(34, 197, 94, 1); }
+            100% { border-color: rgba(34, 197, 94, 0.4); }
+        }
+        .playing-card {
+            border: 2px solid #22c55e !important;
+            animation: pulse-border 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 font-sans min-h-screen flex flex-col justify-between selection:bg-emerald-500 selection:text-white">
+
+    <!-- En-tête principal & Navigation par onglets -->
+    <header class="sticky top-0 z-20 bg-neutral-900/90 backdrop-blur-md border-b border-neutral-800">
+        <div class="max-w-md mx-auto px-4 py-3 flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-bold tracking-wide text-emerald-400 flex items-center gap-2">
+                    <span>📻</span> Mes Radios
+                </h1>
+                <span id="radio-count" class="text-xs bg-neutral-800 text-neutral-400 px-2.5 py-1 rounded-full border border-neutral-700">0 station</span>
+            </div>
+
+            <!-- Navigation Onglets -->
+            <nav class="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800">
+                <button id="tab-btn-listen" onclick="switchTab('listen')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-white bg-emerald-600 shadow-md">
+                    🎧 Écoute & Liste
+                </button>
+                <button id="tab-btn-manage" onclick="switchTab('manage')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-neutral-400 hover:text-white">
+                    ⚙️ Gestion & Import
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Contenu Principal -->
+    <main class="max-w-md mx-auto w-full px-4 py-5 flex-1 pb-28">
+
+        <!-- VUE 1 : ÉCOUTE & LISTE DE RADIOS (Default) -->
+        <section id="view-listen" class="block space-y-4">
+            <!-- Message si aucune radio -->
+            <div id="empty-state" class="hidden text-center py-12 px-4 bg-neutral-900/50 rounded-2xl border border-neutral-800">
+                <div class="text-4xl mb-3">📡</div>
+                <h3 class="text-base font-semibold text-neutral-300">Aucune radio configurée</h3>
+                <p class="text-xs text-neutral-500 mt-1 mb-4">Ajoutez des flux en direct dans l'onglet Gestion pour démarrer l'écoute.</p>
+                <button onclick="switchTab('manage')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition">
+                    Ajouter une radio
+                </button>
+            </div>
+
+            <!-- Liste / Grille des radios -->
+            <div id="radio-grid" class="grid grid-cols-1 gap-3">
+                <!-- Généré dynamiquement par JS -->
+            </div>
+        </section>
+
+        <!-- VUE 2 : GESTION & CONFIGURATION -->
+        <section id="view-manage" class="hidden space-y-6">
+            <!-- Formulaire d'ajout -->
+            <div class="bg-neutral-900 p-5 rounded-2xl border border-neutral-800 shadow-lg space-y-4">
+                <h2 class="text-sm font-bold tracking-wider text-emerald-400 uppercase flex items-center gap-2">
+                    ➕ Ajouter une station
+                </h2>
+
+                <form id="add-radio-form" onsubmit="handleAddRadio(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs text-neutral-400 mb-1">Nom de la radio *</label>
+                        <input type="text" id="input-name" required placeholder="Ex: FIP, France Inter, RTL..." class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-neutral-400 mb-1">URL du flux Audio (Stream HTTP/HTTPS) *</label>
+                        <input type="url" id="input-url" required placeholder="Ex: https://direct.fip.fr/live/fip-midfi.mp3" class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-neutral-400 mb-1">Icône (URL d'image ou Émoji)</label>
+                        <input type="text" id="input-icon" placeholder="Ex: 🎵 ou https://domaine.com/logo.png" class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-semibold text-sm rounded-lg shadow-md transition-all duration-150">
+                        Ajouter à ma liste
+                    </button>
+                </form>
+            </div>
+
+            <!-- Sauvegarde & Restauration JSON -->
+            <div class="bg-neutral-900 p-5 rounded-2xl border border-neutral-800 shadow-lg space-y-4">
+                <h2 class="text-sm font-bold tracking-wider text-sky-400 uppercase flex items-center gap-2">
+                    💾 Sauvegarde & Restauration
+                </h2>
+                <p class="text-xs text-neutral-400 leading-relaxed">
+                    Téléchargez un fichier de sauvegarde local (`.json`) sur votre Fairphone pour conserver vos radios en sécurité ou les transférer.
+                </p>
+
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <button onclick="exportBackup()" class="w-full py-2.5 px-3 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 active:scale-[0.98] text-neutral-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition">
+                        <span>📥</span> Exporter JSON
+                    </button>
+                    
+                    <button onclick="document.getElementById('file-import').click()" class="w-full py-2.5 px-3 bg-sky-950/80 hover:bg-sky-900 border border-sky-800/60 active:scale-[0.98] text-sky-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition">
+                        <span>📤</span> Importer JSON
+                    </button>
+                    <input type="file" id="file-import" accept=".json" class="hidden" onchange="importBackup(event)">
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Mini-Lecteur Audio Persistant en bas de page -->
+    <div id="sticky-player" class="fixed bottom-0 left-0 right-0 z-30 bg-neutral-900/95 backdrop-blur-lg border-t border-neutral-800 px-4 py-3 shadow-2xl transition-transform duration-300 transform translate-y-full">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-3">
+            
+            <div class="flex items-center gap-3 overflow-hidden">
+                <div id="player-icon" class="w-11 h-11 rounded-lg bg-neutral-800 flex items-center justify-center text-xl shrink-0 overflow-hidden border border-neutral-700">
+                    📻
+                </div>
+                <div class="truncate">
+                    <p id="player-title" class="text-sm font-bold text-white truncate">Nom de la radio</p>
+                    <p id="player-status" class="text-xs text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        En direct
+                    </p>
+                </div>
+            </div>
+
+            <!-- Bouton Play/Pause -->
+            <button id="player-play-btn" onclick="togglePlayPause()" class="w-11 h-11 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-neutral-950 rounded-full flex items-center justify-center text-lg font-bold shrink-0 shadow-lg transition">
+                ⏸
+            </button>
+        </div>
+    </div>
+
+    <!-- Lecteur audio HTML5 masqué -->
+    <audio id="audio-element" class="hidden" preload="none"></audio>
+
+    <script>
+        // Data State
+        let radios = [];
+        let currentRadioId = null;
+
+        // DOM Elements
+        const audioElement = document.getElementById('audio-element');
+        const stickyPlayer = document.getElementById('sticky-player');
+        const playerIcon = document.getElementById('player-icon');
+        const playerTitle = document.getElementById('player-title');
+        const playerStatus = document.getElementById('player-status');
+        const playerPlayBtn = document.getElementById('player-play-btn');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRadiosFromStorage();
+            setupAudioEvents();
+        });
+
+        // Toggle Tabs (Single Page Application view management)
+        function switchTab(tabName) {
+            const viewListen = document.getElementById('view-listen');
+            const viewManage = document.getElementById('view-manage');
+            const btnListen = document.getElementById('tab-btn-listen');
+            const btnManage = document.getElementById('tab-btn-manage');
+
+            if (tabName === 'listen') {
+                viewListen.classList.remove('hidden');
+                viewManage.classList.add('hidden');
+                btnListen.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-white bg-emerald-600 shadow-md";
+                btnManage.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-neutral-400 hover:text-white";
+            } else {
+                viewListen.classList.add('hidden');
+                viewManage.classList.remove('hidden');
+                btnManage.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-white bg-emerald-600 shadow-md";
+                btnListen.className = "flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 text-neutral-400 hover:text-white";
+            }
+        }
+
+        function loadRadiosFromStorage() {
+            const stored = localStorage.getItem('fairphone_radios_data');
+            radios = stored ? JSON.parse(stored) : [];
+            renderRadioList();
+        }
+
+        function saveRadiosToStorage() {
+            localStorage.setItem('fairphone_radios_data', JSON.stringify(radios));
+            renderRadioList();
+        }
+
+        function renderRadioList() {
+            const grid = document.getElementById('radio-grid');
+            const emptyState = document.getElementById('empty-state');
+            const radioCount = document.getElementById('radio-count');
+
+            radioCount.textContent = `${radios.length} station${radios.length > 1 ? 's' : ''}`;
+            grid.innerHTML = '';
+
+            if (radios.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            radios.forEach(radio => {
+                const isPlaying = currentRadioId === radio.id;
+                const isUrlIcon = radio.icon.startsWith('http://') || radio.icon.startsWith('https://');
+
+                const card = document.createElement('div');
+                card.id = `card-${radio.id}`;
+                card.className = `bg-neutral-900 border ${isPlaying ? 'playing-card' : 'border-neutral-800'} hover:border-neutral-700 p-3.5 rounded-2xl flex items-center justify-between gap-3 transition-all cursor-pointer shadow-md`;
+                
+                card.onclick = (e) => {
+                    // Eviter de relancer si le clic provient du bouton de suppression
+                    if (e.target.closest('.btn-delete')) return;
+                    playRadio(radio.id);
+                };
+
+                const iconHtml = isUrlIcon 
+                    ? `<img src="${radio.icon}" alt="${radio.name}" class="w-12 h-12 rounded-xl object-cover bg-neutral-950 border border-neutral-800" onerror="this.onerror=null; this.src='https://placehold.co/100x100/262626/white?text=📻';">`
+                    : `<div class="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-2xl">${radio.icon || '📻'}</div>`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3.5 overflow-hidden flex-1">
+                        ${iconHtml}
+                        <div class="truncate">
+                            <h3 class="text-sm font-bold text-white truncate">${radio.name}</h3>
+                            <p class="text-xs text-neutral-500 truncate mt-0.5">${radio.url}</p>
+                        </div>
+                    </div>
+                    <button class="btn-delete p-2 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-lg transition" onclick="deleteRadio(${radio.id}, event)" title="Supprimer">
+                        🗑️
+                    </button>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function handleAddRadio(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('input-name');
+            const urlInput = document.getElementById('input-url');
+            const iconInput = document.getElementById('input-icon');
+
+            const newRadio = {
+                id: Date.now(),
+                name: nameInput.value.trim(),
+                url: urlInput.value.trim(),
+                icon: iconInput.value.trim() || '📻'
+            };
+
+            radios.push(newRadio);
+            saveRadiosToStorage();
+
+            nameInput.value = '';
+            urlInput.value = '';
+            iconInput.value = '';
+
+            switchTab('listen');
+        }
+
+        function deleteRadio(id, event) {
+            event.stopPropagation();
+            if (currentRadioId === id) {
+                stopAudio();
+            }
+            radios = radios.filter(r => r.id !== id);
+            saveRadiosToStorage();
+        }
+
+        function playRadio(id) {
+            const radio = radios.find(r => r.id === id);
+            if (!radio) return;
+
+            // Si clic sur la même radio déjà en cours
+            if (currentRadioId === id && !audioElement.paused) {
+                togglePlayPause();
+                return;
+            }
+
+            currentRadioId = radio.id;
+            audioElement.src = radio.url;
+            audioElement.play().catch(err => {
+                console.error("Erreur de lecture :", err);
+                playerStatus.textContent = "Erreur de connexion";
+                playerStatus.className = "text-xs text-red-400 font-medium";
+            });
+
+            updatePlayerUI(radio);
+            updateMediaSession(radio);
+            renderRadioList();
+        }
+
+        function togglePlayPause() {
+            if (!audioElement.src) return;
+
+            if (audioElement.paused) {
+                audioElement.play();
+                playerPlayBtn.textContent = '⏸';
+                playerStatus.textContent = 'En direct';
+                playerStatus.className = 'text-xs text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5';
+            } else {
+                audioElement.pause();
+                playerPlayBtn.textContent = '▶';
+                playerStatus.textContent = 'En pause';
+                playerStatus.className = 'text-xs text-neutral-400 font-medium flex items-center gap-1.5 mt-0.5';
+            }
+        }
+
+        function stopAudio() {
+            audioElement.pause();
+            audioElement.src = '';
+            currentRadioId = null;
+            stickyPlayer.classList.add('translate-y-full');
+            renderRadioList();
+        }
+
+        function updatePlayerUI(radio) {
+            stickyPlayer.classList.remove('translate-y-full');
+            playerTitle.textContent = radio.name;
+            playerPlayBtn.textContent = '⏸';
+            playerStatus.textContent = 'En direct';
+            playerStatus.className = 'text-xs text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5';
+
+            const isUrlIcon = radio.icon.startsWith('http://') || radio.icon.startsWith('https://');
+            if (isUrlIcon) {
+                playerIcon.innerHTML = `<img src="${radio.icon}" class="w-full h-full object-cover">`;
+            } else {
+                playerIcon.textContent = radio.icon || '📻';
+            }
+        }
+
+        // Intégration navigator.mediaSession pour notifications Fairphone / Android
+        function updateMediaSession(radio) {
+            if ('mediaSession' in navigator) {
+                const isUrlIcon = radio.icon.startsWith('http://') || radio.icon.startsWith('https://');
+                const artworkUrl = isUrlIcon ? radio.icon : 'https://placehold.co/192x192/171717/white?text=📻';
+
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: radio.name,
+                    artist: 'Radio Streaming Direct',
+                    album: 'Mes Radios Fairphone',
+                    artwork: [{ src: artworkUrl, sizes: '192x192', type: 'image/png' }]
+                });
+
+                navigator.mediaSession.setActionHandler('play', () => {
+                    audioElement.play();
+                    playerPlayBtn.textContent = '⏸';
+                });
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    audioElement.pause();
+                    playerPlayBtn.textContent = '▶';
+                });
+            }
+        }
+
+        function setupAudioEvents() {
+            audioElement.addEventListener('playing', () => {
+                playerPlayBtn.textContent = '⏸';
+            });
+            audioElement.addEventListener('pause', () => {
+                playerPlayBtn.textContent = '▶';
+            });
+            audioElement.addEventListener('error', () => {
+                playerStatus.textContent = "Flux indisponible";
+                playerStatus.className = "text-xs text-red-400 font-medium";
+            });
+        }
+
+        function exportBackup() {
+            if (radios.length === 0) {
+                alert("Votre liste est vide, rien à exporter.");
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(radios, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `radios_fairphone_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+        }
+
+        function importBackup(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (Array.isArray(imported)) {
+                        radios = imported;
+                        saveRadiosToStorage();
+                        alert("Liste de radios restaurée avec succès !");
+                        switchTab('listen');
+                    } else {
+                        alert("Format JSON invalide.");
+                    }
+                } catch (err) {
+                    alert("Erreur de lecture du fichier de sauvegarde.");
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
